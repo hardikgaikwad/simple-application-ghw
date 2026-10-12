@@ -3,7 +3,7 @@ import {
   readPdfFiles,
   createPageRecord,
   exportPdfDocument,
-  renderThumbnail,
+  renderPdfPageThumbnail,
   objectUrlFromBlob,
   revokeObjectUrl,
 } from './pdf.js';
@@ -93,9 +93,8 @@ function buildPageCards() {
     img.alt = `Page ${index + 1} preview`;
     img.src = previewUrl;
 
-    if (sourcePdf && sourcePdf.pdf && page.rotation !== 0) {
-      const originalPage = sourcePdf.pdf.getPage(page.sourcePageIndex);
-      renderThumbnail(originalPage, page.rotation, 0.2).then((rotatedUrl) => {
+    if (sourcePdf?.previewDocument && page.rotation !== 0) {
+      renderPdfPageThumbnail(sourcePdf.previewDocument, page.sourcePageIndex, page.rotation, 0.2).then((rotatedUrl) => {
         img.src = rotatedUrl;
       });
     }
@@ -202,8 +201,7 @@ async function loadAndAppendPdfFiles(files, shouldReset = false) {
       appState.sourcePdfs.push(sourcePdfRecord);
 
       for (let pageIndex = 0; pageIndex < pdf.pageCount; pageIndex += 1) {
-        const originalPage = pdf.pdf.getPage(pageIndex);
-        sourcePdfRecord.previewUrls[pageIndex] = await renderThumbnail(originalPage, 0, 0.2);
+        sourcePdfRecord.previewUrls[pageIndex] = await renderPdfPageThumbnail(pdf.previewDocument, pageIndex, 0, 0.2);
 
         addedPages.push(createPageRecord({
           sourcePdfId: pdf.id,

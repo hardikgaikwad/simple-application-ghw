@@ -1,6 +1,19 @@
 import { PDFDocument } from 'pdf-lib';
 
 const PDF_MIME = 'application/pdf';
+let pdfjsModulePromise;
+
+async function getPdfJs() {
+  pdfjsModulePromise ||= import('pdfjs-dist').then((pdfjsLib) => {
+    pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
+      'pdfjs-dist/build/pdf.worker.min.mjs',
+      import.meta.url,
+    ).toString();
+    return pdfjsLib;
+  });
+
+  return pdfjsModulePromise;
+}
 
 function isPdfFile(file) {
   return file && file.type === PDF_MIME
@@ -15,12 +28,17 @@ export async function parsePdfFile(file) {
 
   const bytes = await file.arrayBuffer();
   const pdf = await PDFDocument.load(bytes, { ignoreEncryption: true, updateMetadata: false });
+  const pdfjsLib = await getPdfJs();
+  const previewDocument = await pdfjsLib.getDocument({
+    data: new Uint8Array(bytes.slice(0)),
+  }).promise;
 
   return {
     id: `${file.name}-${file.lastModified || Date.now()}-${Math.random().toString(16).slice(2)}`,
     fileName: file.name,
     bytes,
     pdf,
+    previewDocument,
     pageCount: pdf.getPageCount(),
   };
 }
@@ -78,10 +96,6 @@ function degrees(number) {
 }
 
 export async function renderThumbnail(page, rotation = 0, scale = 0.2) {
-  const pdfjsLib = await import('pdfjs-dist');
-  const workerSrc = new URL('pdfjs-dist/build/pdf.worker.min.mjs', import.meta.url).toString();
-  pdfjsLib.GlobalWorkerOptions.workerSrc = workerSrc;
-
   const viewport = page.getViewport({ scale, rotation: rotation % 360 });
   const canvas = document.createElement('canvas');
   const context = canvas.getContext('2d');
@@ -90,6 +104,11 @@ export async function renderThumbnail(page, rotation = 0, scale = 0.2) {
 
   await page.render({ canvasContext: context, viewport }).promise;
   return canvas.toDataURL('image/png');
+}
+
+export async function renderPdfPageThumbnail(previewDocument, zeroBasedPageIndex, rotation = 0, scale = 0.2) {
+  const page = await previewDocument.getPage(zeroBasedPageIndex + 1);
+  return renderThumbnail(page, rotation, scale);
 }
 
 export function revokeObjectUrl(url) {
